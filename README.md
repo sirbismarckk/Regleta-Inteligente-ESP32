@@ -21,3 +21,5 @@ Se necesita un ESP32, relés, tomacorrientes, alimentación 5v y Arduino IDE
 * **Wilmer Umaña** - *Trabajo Inicial y codigo* - [umana42o].
 
 ## Diseño del circuito
+![ProyectoEA_bb](https://github.com/sirbismarckk/Regleta-Inteligente-ESP32/assets/88695142/f1595486-574a-4d95-bb6a-3034cc547657)
+
