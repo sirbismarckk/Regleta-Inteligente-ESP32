@@ -17,7 +17,7 @@ Se necesita un ESP32, relés, tomacorrientes, alimentación 5v y Arduino IDE
 
 ## Autores
 
-* **Bismarck Vanegas** - *Trabajo Inicial y ciruito* - [sirbismarckk]([https://github.com/TuUsuario](https://github.com/sirbismarckk)https://github.com/sirbismarckk)
+* **Bismarck Vanegas** - *Trabajo Inicial y circuito* - [sirbismarckk]([https://github.com/TuUsuario](https://github.com/sirbismarckk)https://github.com/sirbismarckk)
 * **Wilmer Umaña** - *Trabajo Inicial y codigo* - [umana42o].
 
 ## Diseño del circuito
