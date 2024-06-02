@@ -4,13 +4,29 @@ template<class T> inline Print &operator<<(Print &obj, T arg) {
 }
 
 #include "CTBot.h"
+#include <PZEM004Tv30.h>
 CTBot miBot;
 CTBotInlineKeyboard miTeclado;
-
+#if defined(ESP32)
+PZEM004Tv30 pzem(Serial2, 14, 15);
+#else
+PZEM004Tv30 pzem(Serial2);
+#endif
 int r[6] = { 4, 16, 17, 5, 18, 19 };
 int LED = 21;
 
 #include "token.h"
+
+String getPzEmData() {
+  float voltage = pzem.voltage(); // Lee el voltaje
+  float current = pzem.current(); // Lee la corriente
+  float power = pzem.power(); // Lee el consumo de energía
+  if (isnan(voltage) || isnan(current) || isnan(power)) {
+    return "Error al leer los datos del PZEM";
+  }
+  String data = "Voltaje: " + String(voltage) + "V, Corriente: " + String(current) + "A, Potencia: " + String(power) + "W";
+  return data;
+}
 
 void setup() {
   pinMode(LED, OUTPUT);
@@ -52,7 +68,10 @@ void setup() {
   miTeclado.addButton("ON_ALL", "on_all", CTBotKeyboardButtonQuery);
   miTeclado.addButton("OFF_ALL", "off_all", CTBotKeyboardButtonQuery);
   miTeclado.addRow();
+  miTeclado.addButton("CONSUMO", "consumo", CTBotKeyboardButtonQuery);
+  miTeclado.addRow();
 }
+
 
 void loop() {
   TBMessage msg;
@@ -125,6 +144,12 @@ void loop() {
         digitalWrite(r[i], HIGH);
         }
         miBot.endQuery(msg.callbackQueryID, "Todos los conectores apagados");
+      }else if (msg.callbackQueryData.equals("consumo")) {
+        String data = getPzEmData();
+        miBot.sendMessage(msg.sender.id, "Datos medidos:\n" + data);
+        miBot.endQuery(msg.callbackQueryID, "Datos enviados correctamente", true);
+      } else {
+        miBot.endQuery(msg.callbackQueryID, "Comando no reconocido", false);
       }
     }
   }
@@ -153,3 +178,6 @@ void loop() {
   }
   delay(250);
 }*/
+
+
+
