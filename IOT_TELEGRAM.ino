@@ -3,32 +3,78 @@ template<class T> inline Print &operator<<(Print &obj, T arg) {
   return obj;
 }
 
+#include <time.h>
+#include <WiFiManager.h>
 #include "CTBot.h"
 #include <PZEM004Tv30.h>
 CTBot miBot;
 CTBotInlineKeyboard miTeclado;
 #if defined(ESP32)
-PZEM004Tv30 pzem(Serial2, 14, 15);
+PZEM004Tv30 pzem(Serial2, 12, 14);
 #else
 PZEM004Tv30 pzem(Serial2);
 #endif
 int r[6] = { 4, 16, 17, 5, 18, 19 };
 int LED = 21;
-
+#include <EEPROM.h>
+#define EEPROM_SIZE 120
 #include "token.h"
 
 String getPzEmData() {
   float voltage = pzem.voltage(); // Lee el voltaje
   float current = pzem.current(); // Lee la corriente
   float power = pzem.power(); // Lee el consumo de energía
-  if (isnan(voltage) || isnan(current) || isnan(power)) {
+  float energy = pzem.energy();
+  if (isnan(voltage) || isnan(current) || isnan(power) || isnan(energy)) {
     return "Error al leer los datos del PZEM";
   }
-  String data = "Voltaje: " + String(voltage) + "V, Corriente: " + String(current) + "A, Potencia: " + String(power) + "W";
+  String data = "Voltaje: " + String(voltage) + "V, Corriente: " + String(current) + "A, Potencia: " + String(power) + "W, Consumo:" + String(energy) + "kWh";
   return data;
 }
 
 void setup() {
+  WiFi.mode(WIFI_STA);
+    WiFiManager wm;
+    bool res;
+    res = wm.autoConnect("Regleta_WiFi","12345678."); 
+    if(!res) {
+      Serial.println("Falló la conexión");
+      // ESP.restart();
+    } 
+    else {    
+      Serial.println("Conectado :)");
+    }
+  EEPROM.begin(EEPROM_SIZE);
+  struct tm timeinfo1;
+  getLocalTime(&timeinfo1);
+  int hora_actual = timeinfo1.tm_hour;
+  int dia_actual = timeinfo1.tm_mday;
+  int hora_lectura = EEPROM.read(117);
+  int dia_lectura = EEPROM.read(118);
+  float prom = 0;
+  float prom_dia = 0;
+  if ((hora_actual != hora_lectura) || (dia_actual != dia_lectura))
+  {
+    for(int i = 0; i < 60; i++){
+      prom = prom + EEPROM.read(i);
+      EEPROM.write(i,0);
+      EEPROM.commit();
+    }
+    prom = round(prom/60);
+    EEPROM.write(60+hora_lectura,prom);
+    EEPROM.commit();
+    if (dia_actual != dia_lectura){
+          for(int i = 60; i < 84; i++){
+      prom_dia = prom_dia + EEPROM.read(i);
+      EEPROM.write(i,0);
+      EEPROM.commit();
+    }
+    prom_dia = round((prom_dia/24));
+    EEPROM.write(85,prom_dia);
+    EEPROM.commit();
+    }
+  }
+  EEPROM.write(118,timeinfo1.tm_mday);
   pinMode(LED, OUTPUT);
   Serial.begin(115200);
   Serial.println("Iniciando Bot de Telegram");
@@ -37,15 +83,15 @@ void setup() {
     pinMode(r[i], OUTPUT);
     digitalWrite(r[i], HIGH);
   }
-  miBot.wifiConnect(ssid, password);
+  /*miBot.wifiConnect(ssid, password);*/
 
   miBot.setTelegramToken(token);
 
-  if (miBot.testConnection()) {
+  /*if (miBot.testConnection()) {
     Serial.println("\n Conectado");
   } else {
     Serial.println("\n Problemas Auxilio");
-  }
+  }*/
   
   miTeclado.addButton("ONC1", "onc1", CTBotKeyboardButtonQuery);
   miTeclado.addButton("OFFC1", "offc1", CTBotKeyboardButtonQuery);
@@ -69,12 +115,19 @@ void setup() {
   miTeclado.addButton("OFF_ALL", "off_all", CTBotKeyboardButtonQuery);
   miTeclado.addRow();
   miTeclado.addButton("CONSUMO", "consumo", CTBotKeyboardButtonQuery);
+  miTeclado.addButton("CONSUMO_DIA", "consumo_dia", CTBotKeyboardButtonQuery);
   miTeclado.addRow();
 }
 
 
 void loop() {
+  int ultima_hora;
+  float kWh;
+  float lectura;
+  float lectura2;
   TBMessage msg;
+  struct tm timeinfo;
+  getLocalTime(&timeinfo);
   digitalWrite(LED, HIGH);
   if (miBot.getNewMessage(msg)) {
     if (msg.messageType == CTBotMessageText) {
@@ -148,36 +201,60 @@ void loop() {
         String data = getPzEmData();
         miBot.sendMessage(msg.sender.id, "Datos medidos:\n" + data);
         miBot.endQuery(msg.callbackQueryID, "Datos enviados correctamente", true);
-      } else {
+      }else if (msg.callbackQueryData.equals("consumo_dia")) {
+        ultima_hora = round(EEPROM.read(60+timeinfo.tm_hour-1));
+        lectura = 0;
+        for(int i = 0; i < 60; i++){
+          lectura = lectura + EEPROM.read(i);
+        }
+        EEPROM.write(60+timeinfo.tm_hour,round(lectura/60));
+        lectura = lectura/60;
+        for(int i = 60; i < 84; i++){
+          lectura2 = lectura2 + EEPROM.read(i);
+        }
+        kWh = (lectura2)/1000;
+        miBot.sendMessage(msg.sender.id, "Consumo en la última hora:\nWh:" + String(ultima_hora) + "Consumo en esta hora:\nWh: " + String(lectura) + "\n Consumo de hoy: \nkWh: " + String(kWh));
+        miBot.endQuery(msg.callbackQueryID, "Datos enviados correctamente", true);
+      }
+       else {
         miBot.endQuery(msg.callbackQueryID, "Comando no reconocido", false);
       }
     }
   }
   delay(250);
-}
-
-/*void loop() {
-  TBMessage msg;
-
-  if (CTBotMessageText == miBot.getNewMessage(msg)) { //Verifica si hay un nuevo mensaje disponible
-    Serial << "Mensaje: " << msg.sender.firstName << " - " <<  msg.text << "\n";
-
-    String commandType = msg.text.substring(0, 2);  // Extract the command type ("ON" or "OFF")
-    int connectorNum = msg.text.substring(3).toInt();  // Extract the connector number
-
-    if (connectorNum >= 1 && connectorNum <= 6) {
-      String action = (commandType.equalsIgnoreCase("ON") ? "Encender " : "Apagar ");
-      int state = (commandType.equalsIgnoreCase("ON") ? HIGH : LOW);
-
-      Serial.println(action + "Conector " + connectorNum);
-      digitalWrite(r[connectorNum - 1], state);
-      miBot.sendMessage(msg.sender.id, "Conector " + String(connectorNum) + (state == HIGH ? " Encendido" : " Apagado"));
-    } else {
-      miBot.sendMessage(msg.sender.id, "Bienvenido " + msg.sender.firstName + ",intenta usar: ON o OFF");
-    }
+  //Logica de las lecturas
+  int segundos = timeinfo.tm_sec;
+  int mins = timeinfo.tm_min;
+  int hours = timeinfo.tm_hour;
+  EEPROM.write(118,timeinfo.tm_mday);
+  EEPROM.commit();
+  EEPROM.write(117,hours);
+  EEPROM.commit();
+  if (segundos == 59){
+    EEPROM.write(mins,round(pzem.power()));
+      if (mins == 59){
+        float consumo_min= 0;
+        float consumo_hora = 0;
+        for(int j = 0; j < 60 ; j++){
+          consumo_min = EEPROM.read(j);
+          consumo_hora = consumo_hora + consumo_min;
+          EEPROM.write(j,0);
+          EEPROM.commit();
+        }
+        consumo_hora = round(consumo_hora/60);
+        EEPROM.write(60+hours,consumo_hora);
+        EEPROM.commit();
+        if (hours == 23){
+          float prom_dia = 0;
+          for(int i = 60; i < 84; i++){
+            prom_dia = prom_dia + (EEPROM.read(i));
+            EEPROM.write(i,0);
+            EEPROM.commit();
+          }
+          prom_dia = round((prom_dia/24));
+          EEPROM.write(84,prom_dia);
+          EEPROM.commit();
+        }
+      }
   }
-  delay(250);
-}*/
-
-
-
+}
